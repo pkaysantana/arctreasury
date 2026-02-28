@@ -1,121 +1,95 @@
-/**
- * ArcTreasury Mock Executor Bot
- * ──────────────────────────────
- * A lightweight Node.js daemon that calls `executePayout(policyId, amount)`
- * on a 60-second loop, simulating an agentic treasury automation layer.
- *
- * Usage:
- *   PRIVATE_KEY=0x... TREASURY_ADDRESS=0x... RPC_URL=http://127.0.0.1:8545 node mockExecutor.js
- */
+require("dotenv").config();
+const { ethers } = require("ethers");
 
-const { createPublicClient, createWalletClient, http, parseUnits, formatUnits } = require("viem");
-const { privateKeyToAccount } = require("viem/accounts");
-const { hardhat } = require("viem/chains");
+// Terminal color codes for professional demo output
+const colors = {
+    reset: "\x1b[0m",
+    cyan: "\x1b[36m",
+    green: "\x1b[32m",
+    yellow: "\x1b[33m",
+    red: "\x1b[31m",
+    dim: "\x1b[2m",
+};
 
-// ─── Configuration ───────────────────────────────────────────────────────────
+// Configuration
+const RPC_URL = process.env.RPC_URL || "https://rpc.testnet.arc.network";
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
-if (!PRIVATE_KEY) throw new Error("Missing PRIVATE_KEY in environment");
-const TREASURY_ADDRESS = process.env.TREASURY_ADDRESS || "0x5FbDB2315678afecb367f032d93F642f64180aa3";
-const RPC_URL = process.env.RPC_URL || "http://127.0.0.1:8545";
-const POLICY_ID = BigInt(process.env.POLICY_ID || "1");
-const PAYOUT_AMOUNT = process.env.PAYOUT_AMOUNT || "10000"; // 10,000 USDC
-const INTERVAL_MS = parseInt(process.env.INTERVAL_MS || "60000", 10);
+const TREASURY_ADDRESS = "0xDE4246Ca462e603B782a455EC9C77D64";
+const INTERVAL_MS = 15000; // Check every 15 seconds
 
-// ─── ABI (subset for executePayout) ──────────────────────────────────────────
-const ABI = [
-    {
-        inputs: [
-            { internalType: "uint256", name: "_policyId", type: "uint256" },
-            { internalType: "uint256", name: "totalPayoutAmount", type: "uint256" },
-        ],
-        name: "executePayout",
-        outputs: [],
-        stateMutability: "nonpayable",
-        type: "function",
-    },
-    {
-        inputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-        name: "policies",
-        outputs: [
-            { internalType: "uint256", name: "lastPayout", type: "uint256" },
-            { internalType: "uint256", name: "payoutInterval", type: "uint256" },
-            { internalType: "bool", name: "paused", type: "bool" },
-        ],
-        stateMutability: "view",
-        type: "function",
-    },
-];
-
-// ─── Clients ─────────────────────────────────────────────────────────────────
-const account = privateKeyToAccount(PRIVATE_KEY);
-
-const publicClient = createPublicClient({
-    chain: hardhat,
-    transport: http(RPC_URL),
-});
-
-const walletClient = createWalletClient({
-    account,
-    chain: hardhat,
-    transport: http(RPC_URL),
-});
-
-// ─── Core Loop ───────────────────────────────────────────────────────────────
-let tick = 0;
-
-async function executeCycle() {
-    tick++;
-    const timestamp = new Date().toISOString();
-    console.log(`\n[${timestamp}] ─── Tick #${tick} ───`);
-
-    try {
-        // 1. Read policy state
-        const policy = await publicClient.readContract({
-            address: TREASURY_ADDRESS,
-            abi: ABI,
-            functionName: "policies",
-            args: [POLICY_ID],
-        });
-
-        const [lastPayout, payoutInterval, paused] = policy;
-        console.log(`  Policy ${POLICY_ID}: lastPayout=${lastPayout}, interval=${payoutInterval}, paused=${paused}`);
-
-        if (paused) {
-            console.log("  ⏸  Policy is paused. Skipping.");
-            return;
-        }
-
-        // 2. Execute payout
-        const amount = parseUnits(PAYOUT_AMOUNT, 6);
-        console.log(`  💸 Executing payout: ${PAYOUT_AMOUNT} USDC to policy #${POLICY_ID}...`);
-
-        const hash = await walletClient.writeContract({
-            address: TREASURY_ADDRESS,
-            abi: ABI,
-            functionName: "executePayout",
-            args: [POLICY_ID, amount],
-        });
-
-        console.log(`  ✅ Tx submitted: ${hash}`);
-
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
-        console.log(`  📦 Confirmed in block ${receipt.blockNumber} | gas: ${receipt.gasUsed}`);
-    } catch (err) {
-        console.error(`  ❌ Error: ${err.shortMessage || err.message}`);
-    }
+if (!PRIVATE_KEY) {
+    console.error(`${colors.red}[FATAL] Missing PRIVATE_KEY in .env file${colors.reset}`);
+    process.exit(1);
 }
 
-// ─── Start ───────────────────────────────────────────────────────────────────
-console.log("╔══════════════════════════════════════════╗");
-console.log("║   ArcTreasury Mock Executor Bot v1.0     ║");
-console.log("╠══════════════════════════════════════════╣");
-console.log(`║  Treasury : ${TREASURY_ADDRESS.slice(0, 10)}...${TREASURY_ADDRESS.slice(-6)}`);
-console.log(`║  Policy   : #${POLICY_ID}`);
-console.log(`║  Amount   : ${PAYOUT_AMOUNT} USDC`);
-console.log(`║  Interval : ${INTERVAL_MS / 1000}s`);
-console.log(`║  Executor : ${account.address.slice(0, 10)}...${account.address.slice(-6)}`);
-console.log("╚══════════════════════════════════════════╝");
+// Minimal ABI
+const ARC_TREASURY_ABI = [
+    "function executePayout(uint256 _policyId) external",
+    "function policies(uint256) external view returns (uint256 lastPayout, uint256 interval, bool paused)"
+];
 
-// Run immediately, then on interval
-executeCycle();
-setInterval(executeCycle, INTERVAL_MS);
+async function main() {
+    console.log(`${colors.cyan}======================================================${colors.reset}`);
+    console.log(`${colors.cyan}[INIT] Starting ArcTreasury Automated Executor Bot...${colors.reset}`);
+    console.log(`${colors.cyan}======================================================${colors.reset}`);
+
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
+    const treasury = new ethers.Contract(TREASURY_ADDRESS, ARC_TREASURY_ABI, wallet);
+
+    console.log(`${colors.green}[CONNECTED] Wallet: ${wallet.address}${colors.reset}`);
+    console.log(`${colors.green}[TARGET] Contract: ${TREASURY_ADDRESS}${colors.reset}\n`);
+
+    // Execution Loop
+    setInterval(async () => {
+        const policyId = 1n; // Hardcoded to Policy #1 for demo purposes
+        console.log(`${colors.dim}[ArcTreasury Bot] Scanning Policy #${policyId}...${colors.reset}`);
+
+        try {
+            // Read policy state
+            const policy = await treasury.policies(policyId);
+            const lastPayout = policy[0]; // uint256
+            const interval = policy[1];   // uint256
+            const paused = policy[2];     // bool
+
+            if (paused) {
+                console.log(`${colors.yellow}[SKIP] Policy #${policyId} is PAUSED.${colors.reset}`);
+                return;
+            }
+
+            // Get current block timestamp
+            const currentBlock = await provider.getBlock("latest");
+            const currentTime = BigInt(currentBlock.timestamp);
+
+            const nextPayoutTime = lastPayout + interval;
+
+            if (currentTime >= nextPayoutTime) {
+                console.log(`${colors.cyan}[ACTION] Time-lock expired for Policy #${policyId}. Initiating payout...${colors.reset}`);
+
+                // Broadcast transaction
+                const tx = await treasury.executePayout(policyId);
+                console.log(`${colors.yellow}[PENDING] Payout transaction broadcasted. Hash: ${tx.hash}${colors.reset}`);
+
+                // Wait for confirmation
+                const receipt = await tx.wait();
+                console.log(`${colors.green}[SUCCESS] Payout executed for Policy #${policyId} at block ${receipt.blockNumber}.${colors.reset}`);
+            } else {
+                const remaining = nextPayoutTime - currentTime;
+                console.log(`${colors.dim}[WAIT] Policy #${policyId} time-lock active. ${remaining} seconds remaining.${colors.reset}`);
+            }
+
+        } catch (error) {
+            // Silently log revert errors or RPC failures to prevent the bot from crashing
+            if (error.message.includes("revert")) {
+                console.log(`${colors.red}[REVERT] Contract rejected execution: ${error.shortMessage || error.message}${colors.reset}`);
+            } else {
+                console.log(`${colors.red}[ERROR] Network or provider issue: ${error.shortMessage || error.message}${colors.reset}`);
+            }
+        }
+    }, INTERVAL_MS);
+}
+
+main().catch((error) => {
+    console.error(`${colors.red}[FATAL] ${error.message}${colors.reset}`);
+    process.exit(1);
+});
