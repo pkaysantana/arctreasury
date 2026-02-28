@@ -95,8 +95,8 @@ export default function PolicyBuilder() {
                     <label className="text-sm font-semibold text-gray-300">Recipients & Allocations</label>
                     <span
                         className={`text-xs font-mono font-bold px-2 py-1 rounded-md ${currentTotalPercentage === 100
-                                ? "bg-green-500/10 text-green-400 border border-green-500/20"
-                                : "bg-orange-500/10 text-orange-400 border border-orange-500/20"
+                            ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                            : "bg-orange-500/10 text-orange-400 border border-orange-500/20"
                             }`}
                     >
                         Total: {currentTotalPercentage}% / 100%
@@ -127,6 +127,8 @@ export default function PolicyBuilder() {
                                 onClick={() => removeRecipient(index)}
                                 disabled={recipients.length === 1}
                                 className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                                title="Remove Recipient"
+                                aria-label="Remove Recipient"
                             >
                                 <Trash2 className="w-5 h-5" />
                             </button>

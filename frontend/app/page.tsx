@@ -17,6 +17,7 @@ import {
     Loader2,
 } from "lucide-react";
 import { WalletButton } from "@/components/WalletButton";
+import PolicyBuilder from "@/components/PolicyBuilder";
 import { useAccount } from "wagmi";
 import {
     useExecutePayout,
@@ -180,18 +181,18 @@ export default function Dashboard() {
                         </div>
                     </section>
 
-                    {/* Policy Builder CTA */}
-                    <section className="p-8 rounded-2xl bg-gradient-to-r from-blue-600/5 to-transparent border border-[#1F1F23] flex items-center justify-between">
-                        <div className="flex items-center gap-5">
+                    {/* Policy Builder Mount */}
+                    <section className="p-8 rounded-2xl bg-[#0F1014] border border-[#1F1F23]">
+                        <div className="flex items-center gap-5 mb-8">
                             <div className="p-4 bg-blue-600/10 rounded-xl text-blue-500">
                                 <AlertCircle size={32} />
                             </div>
                             <div>
                                 <h4 className="text-lg font-semibold">New Policy Automation</h4>
-                                <p className="text-sm text-zinc-400">Streamline your distributions with programmable logic.</p>
+                                <p className="text-sm text-zinc-400">Streamline your distributions with programmable, on-chain logic.</p>
                             </div>
                         </div>
-                        <button className="btn-primary">Initialize Policy Builder</button>
+                        <PolicyBuilder />
                     </section>
                 </div>
             </main>
