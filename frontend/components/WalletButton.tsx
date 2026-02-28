@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { Wallet, LogOut, Loader2 } from "lucide-react";
 
@@ -7,6 +8,12 @@ export function WalletButton() {
     const { address, isConnected } = useAccount();
     const { connect, connectors, isLoading } = useConnect();
     const { disconnect } = useDisconnect();
+
+    // Prevent hydration mismatch
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
+
+    if (!mounted) return null;
 
     if (isConnected && address) {
         return (

@@ -57,7 +57,10 @@ export default function PolicyBuilder() {
     const addresses = recipients.map((r) => r.address as `0x${string}`);
     // Contract expects basis points (e.g., 50% = 5000), assuming standard BPS or direct 100 scale.
     // Assuming the contract expects direct percentage sums to 100 (or BPS). If it expects 100 as the total:
-    const percentages = recipients.map((r) => BigInt(Math.floor(parseFloat(r.percentage))));
+    const percentages = recipients.map((r) => {
+        const parsed = parseFloat(r.percentage);
+        return BigInt(Math.floor(isNaN(parsed) ? 0 : parsed));
+    });
     const intervalSeconds = BigInt(parseInt(intervalMinutes || "0") * 60);
 
     // 3. Web3 Hooks (using wagmi v1 based on project dependencies)
