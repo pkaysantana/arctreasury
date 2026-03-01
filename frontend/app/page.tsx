@@ -1,326 +1,273 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import {
-    Plus,
-    Wallet,
-    ArrowUpRight,
-    History,
-    Pause,
-    Play,
-    AlertCircle,
-    ChevronRight,
-    LayoutDashboard,
-    Settings,
-    ShieldCheck,
-    TrendingUp,
-    Loader2,
-} from "lucide-react";
-import { WalletButton } from "@/components/WalletButton";
-import PolicyBuilder from "@/components/PolicyBuilder";
-import { useAccount } from "wagmi";
-import {
-    useExecutePayout,
-    usePausePolicy,
-    useRaiseDispute,
-} from "@/hooks/useArcTreasury";
-import { useToast } from "@/components/Toast";
+import { useState, useMemo, useEffect } from "react";
+import { useAccount, useConnect, useDisconnect, useContractWrite, useWaitForTransaction } from "wagmi";
+import { InjectedConnector } from "wagmi/connectors/injected";
 
-// ─── Mock policy data (would come from on-chain indexing in production) ──────
-const MOCK_POLICIES = [
+// ─── Contract Configuration ──────────────────────────────────────────────────
+const TREASURY_ADDRESS = "0xde4246ca462e603b782a455ec9c77d64" as const;
+
+const ABI = [
     {
-        id: 0,
-        label: "#P-1002",
-        recipients: "Ops / Marketing / Dev",
-        frequency: "Every 30 Days",
-        next: "Mar 12, 2026",
-        status: "Active" as const,
-        payoutAmount: "50000",
+        inputs: [
+            { internalType: "address[]", name: "_recipients", type: "address[]" },
+            { internalType: "uint256[]", name: "_percentages", type: "uint256[]" },
+            { internalType: "uint256", name: "_interval", type: "uint256" },
+        ],
+        name: "createPolicy",
+        outputs: [],
+        stateMutability: "nonpayable",
+        type: "function",
     },
     {
-        id: 1,
-        label: "#P-1003",
-        recipients: "Liquidity Pool A",
-        frequency: "Weekly",
-        next: "Mar 05, 2026",
-        status: "Paused" as const,
-        payoutAmount: "10000",
+        inputs: [
+            { internalType: "uint256", name: "_policyId", type: "uint256" },
+            { internalType: "uint256", name: "totalPayoutAmount", type: "uint256" },
+        ],
+        name: "executePayout",
+        outputs: [],
+        stateMutability: "nonpayable",
+        type: "function",
     },
-    {
-        id: 2,
-        label: "#P-1004",
-        recipients: "Founder Vesting",
-        frequency: "Bi-Weekly",
-        next: "Mar 15, 2026",
-        status: "Active" as const,
-        payoutAmount: "75000",
-    },
-];
+] as const;
 
-export default function Dashboard() {
-    const [activeTab, setActiveTab] = useState("dashboard");
-    const { isConnected } = useAccount();
+// ─── Wallet Button ────────────────────────────────────────────────────────────
+function ConnectButton() {
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
+    const { address, isConnected } = useAccount();
+    const { connect } = useConnect({ connector: new InjectedConnector() });
+    const { disconnect } = useDisconnect();
 
-    return (
-        <div className="flex min-h-screen bg-[#0A0A0B] text-[#FAFAFA] antialiased">
-            {/* Sidebar */}
-            <aside className="w-64 border-r border-[#1F1F23] bg-[#0A0A0B] flex flex-col">
-                <div className="p-6">
-                    <div className="flex items-center gap-3 mb-10">
-                        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-lg">
-                            A
-                        </div>
-                        <h1 className="text-xl font-bold tracking-tight">ArcTreasury</h1>
-                    </div>
+    if (!mounted) return null;
 
-                    <nav className="space-y-1">
-                        <NavItem active={activeTab === "dashboard"} onClick={() => setActiveTab("dashboard")} icon={<LayoutDashboard size={20} />} label="Dashboard" />
-                        <NavItem active={activeTab === "policies"} onClick={() => setActiveTab("policies")} icon={<ShieldCheck size={20} />} label="Policies" />
-                        <NavItem active={activeTab === "history"} onClick={() => setActiveTab("history")} icon={<History size={20} />} label="Activity" />
-                        <NavItem active={activeTab === "settings"} onClick={() => setActiveTab("settings")} icon={<Settings size={20} />} label="Settings" />
-                    </nav>
-                </div>
-
-                <div className="mt-auto p-6 border-t border-[#1F1F23]">
-                    <div className="p-4 rounded-xl bg-gradient-to-br from-blue-600/10 to-transparent border border-blue-600/20">
-                        <p className="text-xs text-zinc-400 mb-2">Powered by</p>
-                        <p className="text-sm font-semibold">Arc Layer-1</p>
-                    </div>
-                </div>
-            </aside>
-
-            {/* Main Content */}
-            <main className="flex-1 flex flex-col h-screen overflow-hidden">
-                {/* Header */}
-                <header className="h-20 border-b border-[#1F1F23] flex items-center justify-between px-8 bg-[#0A0A0B]/80 backdrop-blur-md z-10">
-                    <div>
-                        <h2 className="text-lg font-semibold capitalize">{activeTab}</h2>
-                        <p className="text-xs text-zinc-500">Manage your programmable USDC treasury</p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <WalletButton />
-                    </div>
-                </header>
-
-                {/* Scrollable Area */}
-                <div className="flex-1 overflow-y-auto p-8 space-y-8">
-                    {/* Treasury Balance Hero */}
-                    <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="md:col-span-2 p-8 rounded-2xl bg-[#111113] border border-[#1F1F23] relative overflow-hidden card-gradient group">
-                            <div className="absolute top-0 right-0 p-8 text-blue-600/10 group-hover:text-blue-600/20 transition-colors">
-                                <Wallet size={120} />
-                            </div>
-                            <div className="relative z-10">
-                                <p className="text-sm font-medium text-zinc-400 mb-1">Total Treasury Balance</p>
-                                <div className="flex items-baseline gap-3 mb-6">
-                                    <h3 className="text-5xl font-bold">2,450,000.00</h3>
-                                    <span className="text-xl font-medium text-zinc-500">USDC</span>
-                                </div>
-                                <div className="flex gap-3">
-                                    <button className="btn-primary flex items-center gap-2">
-                                        <Plus size={18} /> Deposit Funds
-                                    </button>
-                                    <button className="btn-secondary">View Transactions</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="p-8 rounded-2xl bg-[#111113] border border-[#1F1F23] flex flex-col justify-between card-gradient">
-                            <div>
-                                <p className="text-sm font-medium text-zinc-400 mb-1">Active Yield</p>
-                                <div className="flex items-center gap-2 text-emerald-400 font-semibold mb-4">
-                                    <TrendingUp size={16} /> 4.2% APY
-                                </div>
-                            </div>
-                            <div>
-                                <div className="h-12 w-full bg-zinc-900 rounded-lg overflow-hidden relative">
-                                    <div className="absolute inset-y-0 left-0 bg-blue-600 w-2/3 shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>
-                                </div>
-                                <p className="text-[10px] text-zinc-500 mt-2 text-right">67% Utilization</p>
-                            </div>
-                        </div>
-                    </section>
-
-                    {/* Active Policies */}
-                    <section className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <h4 className="text-lg font-semibold">Active Payout Policies</h4>
-                            <button className="text-sm text-blue-500 hover:text-blue-400 transition-colors flex items-center gap-1 font-medium">
-                                Create New <ChevronRight size={14} />
-                            </button>
-                        </div>
-
-                        <div className="rounded-2xl border border-[#1F1F23] bg-[#111113] overflow-hidden">
-                            <table className="w-full text-left">
-                                <thead className="border-b border-[#1F1F23] bg-[#0A0A0B]/50">
-                                    <tr className="text-xs text-zinc-400 uppercase tracking-wider">
-                                        <th className="px-6 py-4">Policy ID</th>
-                                        <th className="px-6 py-4">Recipients</th>
-                                        <th className="px-6 py-4">Frequency</th>
-                                        <th className="px-6 py-4">Next Payout</th>
-                                        <th className="px-6 py-4">Status</th>
-                                        <th className="px-6 py-4 text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-[#1F1F23]">
-                                    {MOCK_POLICIES.map((policy) => (
-                                        <PolicyRow
-                                            key={policy.id}
-                                            policyId={BigInt(policy.id)}
-                                            label={policy.label}
-                                            recipients={policy.recipients}
-                                            frequency={policy.frequency}
-                                            next={policy.next}
-                                            status={policy.status}
-                                            payoutAmount={policy.payoutAmount}
-                                            isConnected={isConnected}
-                                        />
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
-
-                    {/* Policy Builder Mount */}
-                    <section className="p-8 rounded-2xl bg-[#0F1014] border border-[#1F1F23]">
-                        <div className="flex items-center gap-5 mb-8">
-                            <div className="p-4 bg-blue-600/10 rounded-xl text-blue-500">
-                                <AlertCircle size={32} />
-                            </div>
-                            <div>
-                                <h4 className="text-lg font-semibold">New Policy Automation</h4>
-                                <p className="text-sm text-zinc-400">Streamline your distributions with programmable, on-chain logic.</p>
-                            </div>
-                        </div>
-                        <PolicyBuilder />
-                    </section>
-                </div>
-            </main>
-        </div>
-    );
-}
-
-// ─── Sub-components ──────────────────────────────────────────────────────────
-
-function NavItem({ icon, label, active, onClick }: { icon: any; label: string; active?: boolean; onClick: () => void }) {
+    if (isConnected && address) {
+        return (
+            <div className="flex items-center gap-3">
+                <span className="text-sm font-mono text-zinc-400 bg-zinc-900 border border-zinc-700 px-3 py-1.5 rounded-lg">
+                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 mr-2 animate-pulse" />
+                    {address.slice(0, 6)}...{address.slice(-4)}
+                </span>
+                <button onClick={() => disconnect()} className="text-sm text-zinc-500 hover:text-white border border-zinc-700 hover:border-zinc-500 px-3 py-1.5 rounded-lg transition-colors">
+                    Disconnect
+                </button>
+            </div>
+        );
+    }
     return (
         <button
-            onClick={onClick}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${active ? "bg-zinc-900 text-white font-medium" : "text-zinc-500 hover:bg-zinc-900/50 hover:text-zinc-300"
-                }`}
+            onClick={() => connect()}
+            className="text-sm font-semibold bg-white text-black px-4 py-2 rounded-lg hover:bg-zinc-200 transition-colors"
         >
-            <span className={active ? "text-blue-500" : "group-hover:text-zinc-300"}>{icon}</span>
-            {label}
+            Connect Wallet
         </button>
     );
 }
 
-function PolicyRow({
-    policyId,
-    label,
-    recipients,
-    frequency,
-    next,
-    status,
-    payoutAmount,
-    isConnected,
-}: {
-    policyId: bigint;
-    label: string;
-    recipients: string;
-    frequency: string;
-    next: string;
-    status: "Active" | "Paused";
-    payoutAmount: string;
-    isConnected: boolean;
-}) {
-    const isActive = status === "Active";
-    const { toast } = useToast();
+// ─── Section Wrapper ──────────────────────────────────────────────────────────
+function Card({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+    return (
+        <section className="border border-zinc-800 rounded-xl bg-zinc-900/50 overflow-hidden">
+            <div className="border-b border-zinc-800 px-6 py-4">
+                <h2 className="text-base font-bold text-white">{title}</h2>
+                <p className="text-sm text-zinc-500 mt-0.5">{subtitle}</p>
+            </div>
+            <div className="p-6">{children}</div>
+        </section>
+    );
+}
 
-    // ─── Execute Payout ────
-    const executePayout = useExecutePayout(policyId, payoutAmount);
-    const [executingPayout, setExecutingPayout] = useState(false);
+// ─── Status Banner ────────────────────────────────────────────────────────────
+function TxStatus({ isLoading, isSuccess, isError, error, hash }: { isLoading: boolean; isSuccess: boolean; isError: boolean; error: Error | null; hash?: string }) {
+    if (isLoading) return <p className="text-sm text-yellow-400 mt-3 font-mono">⏳ Broadcasting transaction...</p>;
+    if (isSuccess) return <p className="text-sm text-emerald-400 mt-3 font-mono">✅ Confirmed! Hash: {hash?.slice(0, 18)}...</p>;
+    if (isError) return (
+        <div className="mt-3 text-xs text-red-400 bg-red-400/10 border border-red-400/20 p-3 rounded-lg font-mono break-all">
+            ❌ {error?.message ?? "Transaction failed"}
+        </div>
+    );
+    return null;
+}
 
-    const handleExecute = async () => {
-        if (!isConnected) {
-            toast("Connect your wallet first", "error");
-            return;
-        }
-        if (!executePayout.write) {
-            toast("Transaction not ready — check contract state", "error");
-            return;
-        }
-        setExecutingPayout(true);
-        const loadingId = toast(`Executing payout for ${label}...`, "loading");
-        try {
-            await executePayout.writeAsync?.();
-            toast(`Payout executed for ${label}`, "success");
-        } catch (err: any) {
-            toast(err?.shortMessage || "Payout failed", "error");
-        } finally {
-            setExecutingPayout(false);
-        }
+// ─── Main Page ────────────────────────────────────────────────────────────────
+export default function Home() {
+    // — Create Policy State
+    const [rows, setRows] = useState([{ address: "", percentage: "" }]);
+    const [intervalMin, setIntervalMin] = useState("1");
+
+    const totalPct = useMemo(() => rows.reduce((s, r) => s + (parseFloat(r.percentage) || 0), 0), [rows]);
+    const allValid = rows.every(r => /^0x[0-9a-fA-F]{40}$/.test(r.address.trim())) && totalPct === 100 && parseInt(intervalMin) > 0;
+
+    const addRow = () => setRows(r => [...r, { address: "", percentage: "" }]);
+    const removeRow = (i: number) => setRows(r => r.filter((_, idx) => idx !== i));
+    const updateRow = (i: number, field: "address" | "percentage", v: string) =>
+        setRows(r => r.map((row, idx) => idx === i ? { ...row, [field]: field === "address" ? v.trim() : v } : row));
+
+    const {
+        write: createPolicy,
+        data: createData,
+        isLoading: createLoading,
+        isError: createIsError,
+        error: createError,
+    } = useContractWrite({ address: TREASURY_ADDRESS, abi: ABI, functionName: "createPolicy" });
+
+    const { isLoading: createWaiting, isSuccess: createSuccess } = useWaitForTransaction({ hash: createData?.hash });
+
+    const handleCreate = () => {
+        if (!allValid) return;
+        createPolicy({
+            args: [
+                rows.map(r => r.address.trim() as `0x${string}`),
+                rows.map(r => BigInt(Math.floor(parseFloat(r.percentage)))),
+                BigInt(parseInt(intervalMin) * 60),
+            ],
+        });
     };
 
-    // ─── Pause / Dispute ────
-    const pausePolicy = usePausePolicy(policyId);
+    // — Execute Payout State
+    const [policyId, setPolicyId] = useState("1");
+    const [payoutAmount, setPayoutAmount] = useState("100");
 
-    const handleTogglePause = async () => {
-        if (!isConnected) {
-            toast("Connect your wallet first", "error");
-            return;
-        }
-        if (!pausePolicy.write) {
-            toast("Transaction not ready", "error");
-            return;
-        }
-        const loadingId = toast(isActive ? `Pausing ${label}...` : `Resuming ${label}...`, "loading");
-        try {
-            await pausePolicy.writeAsync?.();
-            toast(isActive ? `${label} paused` : `${label} resumed`, "success");
-        } catch (err: any) {
-            toast(err?.shortMessage || "Action failed", "error");
-        }
+    const {
+        write: executePayout,
+        data: execData,
+        isLoading: execLoading,
+        isError: execIsError,
+        error: execError,
+    } = useContractWrite({ address: TREASURY_ADDRESS, abi: ABI, functionName: "executePayout" });
+
+    const { isLoading: execWaiting, isSuccess: execSuccess } = useWaitForTransaction({ hash: execData?.hash });
+
+    const handleExecute = () => {
+        executePayout({
+            args: [BigInt(parseInt(policyId) || 0), BigInt(parseInt(payoutAmount) * 1_000_000)],
+        });
     };
 
     return (
-        <tr className="hover:bg-zinc-900/30 transition-colors group">
-            <td className="px-6 py-5 align-middle">
-                <span className="font-mono text-xs text-zinc-400">{label}</span>
-            </td>
-            <td className="px-6 py-5 align-middle">
-                <p className="text-sm font-medium">{recipients}</p>
-                <p className="text-[10px] text-zinc-500">USDC Managed</p>
-            </td>
-            <td className="px-6 py-5 align-middle">
-                <span className="text-sm">{frequency}</span>
-            </td>
-            <td className="px-6 py-5 align-middle text-sm">{next}</td>
-            <td className="px-6 py-5 align-middle text-sm font-medium">
-                <div className={`flex items-center gap-1.5 ${isActive ? "text-emerald-400" : "text-amber-400"}`}>
-                    <div className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-emerald-400" : "bg-amber-400"}`}></div>
-                    {status}
+        <div className="min-h-screen bg-zinc-950 text-white font-sans">
+            {/* Header */}
+            <header className="border-b border-zinc-800 px-6 py-4 flex items-center justify-between sticky top-0 bg-zinc-950/80 backdrop-blur z-10">
+                <div className="flex items-center gap-3">
+                    <div className="w-7 h-7 rounded-md bg-white flex items-center justify-center text-black font-black text-sm">A</div>
+                    <h1 className="text-sm font-bold tracking-tight">ArcTreasury <span className="text-zinc-500 font-normal">/ Programmable USDC Routing</span></h1>
                 </div>
-            </td>
-            <td className="px-6 py-5 align-middle text-right">
-                <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                        onClick={handleExecute}
-                        disabled={executingPayout}
-                        className="p-2 hover:bg-blue-600/10 text-blue-500 rounded-md transition-colors disabled:opacity-40"
-                        title="Execute Payout"
-                    >
-                        {executingPayout ? <Loader2 size={18} className="animate-spin" /> : <ArrowUpRight size={18} />}
-                    </button>
-                    <button
-                        onClick={handleTogglePause}
-                        className="p-2 hover:bg-zinc-800 rounded-md transition-colors text-zinc-400"
-                        title={isActive ? "Pause Policy" : "Resume Policy"}
-                    >
-                        {isActive ? <Pause size={18} /> : <Play size={18} />}
-                    </button>
-                </div>
-            </td>
-        </tr>
+                <ConnectButton />
+            </header>
+
+            {/* Contract Tag */}
+            <div className="px-6 py-3 border-b border-zinc-800 bg-zinc-900/40">
+                <p className="text-xs text-zinc-500 font-mono">
+                    Contract: <span className="text-zinc-300">{TREASURY_ADDRESS}</span>
+                    <span className="ml-3 text-emerald-400/80">● Arc Testnet (5042002)</span>
+                </p>
+            </div>
+
+            <main className="max-w-2xl mx-auto px-6 py-10 space-y-8">
+                {/* ── Create Policy ── */}
+                <Card title="01 — Create Policy" subtitle="Define recipients, allocations, and payout interval. Writes to the blockchain.">
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-center text-xs mb-1">
+                            <span className="text-zinc-400 font-semibold uppercase tracking-wider">Recipients</span>
+                            <span className={`font-mono px-2 py-0.5 rounded ${totalPct === 100 ? "bg-emerald-400/10 text-emerald-400" : "bg-orange-400/10 text-orange-400"}`}>
+                                {totalPct}% / 100%
+                            </span>
+                        </div>
+
+                        {rows.map((row, i) => (
+                            <div key={i} className="flex gap-2">
+                                <input
+                                    className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
+                                    placeholder="0x..."
+                                    value={row.address}
+                                    onChange={e => updateRow(i, "address", e.target.value)}
+                                />
+                                <div className="relative w-28">
+                                    <input
+                                        className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 pr-7 text-sm font-mono text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
+                                        placeholder="0"
+                                        type="number"
+                                        value={row.percentage}
+                                        onChange={e => updateRow(i, "percentage", e.target.value)}
+                                    />
+                                    <span className="absolute right-3 top-2 text-zinc-500 text-sm">%</span>
+                                </div>
+                                <button
+                                    onClick={() => removeRow(i)}
+                                    disabled={rows.length === 1}
+                                    className="text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-20 px-2"
+                                    aria-label="Remove"
+                                >✕</button>
+                            </div>
+                        ))}
+
+                        <button onClick={addRow} className="text-sm text-zinc-500 hover:text-white transition-colors flex items-center gap-1">
+                            <span className="text-lg leading-none">+</span> Add Recipient
+                        </button>
+
+                        <div className="pt-2 border-t border-zinc-800 flex items-center gap-3">
+                            <label className="text-xs text-zinc-400 whitespace-nowrap">Interval (min)</label>
+                            <input
+                                className="w-28 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-zinc-200 focus:outline-none focus:border-zinc-500"
+                                type="number"
+                                value={intervalMin}
+                                onChange={e => setIntervalMin(e.target.value)}
+                            />
+                        </div>
+
+                        <button
+                            onClick={handleCreate}
+                            disabled={!allValid || createLoading || createWaiting}
+                            className="w-full mt-1 py-2.5 text-sm font-bold bg-white text-black rounded-lg hover:bg-zinc-200 transition-colors disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed"
+                        >
+                            {createLoading || createWaiting ? "Deploying..." : "Deploy Policy →"}
+                        </button>
+
+                        <TxStatus isLoading={createLoading || createWaiting} isSuccess={createSuccess} isError={createIsError} error={createError} hash={createData?.hash} />
+                    </div>
+                </Card>
+
+                {/* ── Execute Payout ── */}
+                <Card title="02 — Manual Execution" subtitle="Hackathon demo override. Trigger a policy payout by ID.">
+                    <div className="space-y-3">
+                        <div className="flex gap-3">
+                            <div className="flex-1">
+                                <label className="text-xs text-zinc-400 mb-1 block">Policy ID</label>
+                                <input
+                                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-zinc-200 focus:outline-none focus:border-zinc-500"
+                                    type="number"
+                                    value={policyId}
+                                    onChange={e => setPolicyId(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <label className="text-xs text-zinc-400 mb-1 block">Amount (USDC)</label>
+                                <input
+                                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-zinc-200 focus:outline-none focus:border-zinc-500"
+                                    type="number"
+                                    value={payoutAmount}
+                                    onChange={e => setPayoutAmount(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={handleExecute}
+                            disabled={execLoading || execWaiting}
+                            className="w-full py-2.5 text-sm font-bold bg-zinc-100 text-black rounded-lg hover:bg-white transition-colors disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed"
+                        >
+                            {execLoading || execWaiting ? "Executing..." : "Execute Payout →"}
+                        </button>
+
+                        <TxStatus isLoading={execLoading || execWaiting} isSuccess={execSuccess} isError={execIsError} error={execError} hash={execData?.hash} />
+                    </div>
+                </Card>
+
+                {/* Footer */}
+                <p className="text-center text-xs text-zinc-600 font-mono pb-8">
+                    arc testnet · chain id 5042002 · ArcTreasury.sol
+                </p>
+            </main>
+        </div>
     );
 }

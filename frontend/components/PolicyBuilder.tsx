@@ -36,7 +36,7 @@ export default function PolicyBuilder() {
 
     const updateRecipient = (index: number, field: "address" | "percentage", value: string) => {
         const newRecipients = [...recipients];
-        newRecipients[index][field] = value;
+        newRecipients[index][field] = field === "address" ? value.trim() : value;
         setRecipients(newRecipients);
     };
 
@@ -63,18 +63,14 @@ export default function PolicyBuilder() {
     });
     const intervalSeconds = BigInt(parseInt(intervalMinutes || "0") * 60);
 
-    // 3. Web3 Hooks (using wagmi v1 based on project dependencies)
-    const { config } = usePrepareContractWrite({
+    // 3. Web3 Hooks (Bypass preparation to force simulated errors directly in MetaMask)
+    const { data: writeData, write: executeCreatePolicy, isLoading: isWriting, error: writeError } = useContractWrite({
         address: process.env.NEXT_PUBLIC_TREASURY_ADDRESS as `0x${string}`,
         abi: arcTreasuryABI,
         functionName: "createPolicy",
-        args: [addresses, percentages, intervalSeconds],
-        enabled: isFormValid,
     });
 
-    const { data: writeData, write: executeCreatePolicy, isLoading: isWriting } = useContractWrite(config);
-
-    const { isLoading: isWaiting, isSuccess, isError } = useWaitForTransaction({
+    const { isLoading: isWaiting, isSuccess, isError, error: txError } = useWaitForTransaction({
         hash: writeData?.hash,
     });
 
@@ -161,9 +157,12 @@ export default function PolicyBuilder() {
 
             {/* Submission Status & Button */}
             <div className="pt-6 border-t border-gray-800">
-                {isError && (
-                    <div className="mb-4 text-sm text-red-400 bg-red-400/10 border border-red-400/20 p-3 rounded-lg">
-                        Failed to prepare or execute transaction. Ensure wallet is connected, inputs are valid, and you have testnet gas.
+                {(isError || writeError || txError) && (
+                    <div className="mb-4 text-sm text-red-400 bg-red-400/10 border border-red-400/20 p-4 rounded-lg flex flex-col gap-2 overflow-x-auto">
+                        <span className="font-bold border-b border-red-400/20 pb-1">Transaction Failed</span>
+                        <code className="text-xs break-all">
+                            {writeError?.message || txError?.message || "Unknown error execution transaction. Check wallet balance."}
+                        </code>
                     </div>
                 )}
 
@@ -174,8 +173,10 @@ export default function PolicyBuilder() {
                 )}
 
                 <button
-                    onClick={() => executeCreatePolicy?.()}
-                    disabled={!isFormValid || !executeCreatePolicy || isTxPending}
+                    onClick={() => executeCreatePolicy?.({
+                        args: [addresses, percentages, intervalSeconds]
+                    })}
+                    disabled={!isFormValid || isTxPending}
                     className="w-full relative group bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-800 disabled:text-gray-500 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed border border-transparent disabled:border-gray-700"
                 >
                     {isTxPending ? (
