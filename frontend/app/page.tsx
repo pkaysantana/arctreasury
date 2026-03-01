@@ -1,11 +1,12 @@
 "use client";
 
+import "./globals.css"; // Ensure Tailwind is compiled and injected
 import { useState, useMemo, useEffect } from "react";
 import { useAccount, useConnect, useDisconnect, useContractWrite, useWaitForTransaction } from "wagmi";
 import { InjectedConnector } from "wagmi/connectors/injected";
 
 // ─── Contract Configuration ──────────────────────────────────────────────────
-const TREASURY_ADDRESS = "0xde4246ca462e603b782a455ec9c77d64" as const;
+const TREASURY_ADDRESS = "0x11fA5851AAC827010d3083846Ca1eE9C46597305" as const;
 
 const ABI = [
     {
@@ -101,7 +102,7 @@ export default function Home() {
     const addRow = () => setRows(r => [...r, { address: "", percentage: "" }]);
     const removeRow = (i: number) => setRows(r => r.filter((_, idx) => idx !== i));
     const updateRow = (i: number, field: "address" | "percentage", v: string) =>
-        setRows(r => r.map((row, idx) => idx === i ? { ...row, [field]: field === "address" ? v.trim() : v } : row));
+        setRows(r => r.map((row, idx) => idx === i ? { ...row, [field]: field === "address" ? v.trim() : v.replace(/[^0-9.]/g, '') } : row));
 
     const {
         write: createPolicy,
@@ -186,7 +187,7 @@ export default function Home() {
                                     <input
                                         className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 pr-7 text-sm font-mono text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
                                         placeholder="0"
-                                        type="number"
+                                        type="text"
                                         value={row.percentage}
                                         onChange={e => updateRow(i, "percentage", e.target.value)}
                                     />
@@ -217,7 +218,7 @@ export default function Home() {
 
                         <button
                             onClick={handleCreate}
-                            disabled={!allValid || createLoading || createWaiting}
+                            disabled={createLoading || createWaiting}
                             className="w-full mt-1 py-2.5 text-sm font-bold bg-white text-black rounded-lg hover:bg-zinc-200 transition-colors disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed"
                         >
                             {createLoading || createWaiting ? "Deploying..." : "Deploy Policy →"}

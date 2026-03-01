@@ -13,6 +13,7 @@ async function main() {
     await treasury.waitForDeployment();
 
     console.log("ArcTreasury deployed to:", treasury.target);
+    require("fs").writeFileSync("address.json", JSON.stringify({ address: treasury.target }));
 }
 
 main().catch((error) => {
