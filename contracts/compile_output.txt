@@ -1,0 +1,39 @@
+[dotenv@17.3.1] injecting env (1) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+[1m[31mDeclarationError:[39m[22m Function "mcopy" not found.
+  --> @openzeppelin/contracts/utils/Bytes.sol:94:13:
+   |
+94 |             mcopy(add(result, 0x20), add(add(buffer, 0x20), start), sub(end, start))
+   |             ^^^^^
+
+
+[1m[31mDeclarationError:[39m[22m Function "mcopy" not found.
+   --> @openzeppelin/contracts/utils/Bytes.sol:124:13:
+    |
+124 |             mcopy(add(buffer, 0x20), add(add(buffer, 0x20), start), sub(end, start))
+    |             ^^^^^
+
+
+[1m[31mDeclarationError:[39m[22m Function "mcopy" not found.
+   --> @openzeppelin/contracts/utils/Bytes.sol:168:13:
+    |
+168 |             mcopy(add(add(buffer, 0x20), pos), add(add(replacement, 0x20), offset), length)
+    |             ^^^^^
+
+
+[1m[31mDeclarationError:[39m[22m Function "mcopy" not found.
+   --> @openzeppelin/contracts/utils/Bytes.sol:195:17:
+    |
+195 |                 mcopy(add(result, offset), add(input, 0x20), mload(input))
+    |                 ^^^^^
+
+
+[1m[31mDeclarationError:[39m[22m Function "mcopy" not found.
+  --> @openzeppelin/contracts/utils/cryptography/SignatureChecker.sol:83:13:
+   |
+83 |             mcopy(add(ptr, 0x44), signature, add(length, 0x20))
+   |             ^^^^^
+
+
+[31m[1mError[22m[39m [31m[1mHH600:[22m[39m Compilation failed
+
+For more info go to https://v2.hardhat.org/HH600 or run Hardhat with --show-stack-traces
