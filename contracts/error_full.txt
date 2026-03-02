@@ -1,0 +1,35 @@
+
+
+[dotenv@17.3.1] injecting env (1) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+
+
+  OTTOVaultV2 O(1) Distribution Stress Test & Limits
+    Agent Guardrails
+      ✔ Should block transfers to non-whitelisted addresses
+      1) Should allow transfers to whitelisted addresses within limits
+      2) Should enforce per-tx limits
+    O(1) Revenue Distribution with 10+ Mock Shareholders
+      ✔ Should correctly distribute yield to 10+ shareholders simultaneously without loops
+      ✔ Should properly manage transfers post-distribution
+
+
+  3 passing (796ms)
+  2 failing
+
+  1) OTTOVaultV2 O(1) Distribution Stress Test & Limits
+       Agent Guardrails
+         Should allow transfers to whitelisted addresses within limits:
+     TypeError: vault.connect(...).setWhitelist is not a function
+      at Context.<anonymous> (test\OTTOVault.test.js:54:38)
+      at processImmediate (node:internal/timers:504:21)
+
+  2) OTTOVaultV2 O(1) Distribution Stress Test & Limits
+       Agent Guardrails
+         Should enforce per-tx limits:
+     TypeError: vault.connect(...).setWhitelist is not a function
+      at Context.<anonymous> (test\OTTOVault.test.js:62:38)
+      at processImmediate (node:internal/timers:504:21)
+
+
+
+WARNING: You are currently using Node.js v24.13.0, which is not supported by Hardhat. This can lead to unexpected behavior. See https://hardhat.org/nodejs-versions
