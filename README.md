@@ -1,45 +1,51 @@
-# ArcTreasury
+# ArcTreasury: Deterministic USDC Treasury Engine on Arc
 
-**Programmable USDC Treasury for Enterprise-Grade Asset Management**
-ArcTreasury is a secure, policy-driven treasury application that enables organizations to automate fund distributions, manage internal payouts, and maintain real-time visibility over USDC reserves with institutional-grade precision.
+ArcTreasury is a foundational financial control layer built on the Arc Layer-1 blockchain. It provides deterministic, programmable constraints for USDC payouts, acting as a secure primitive for agent networks, DAO treasuries, and enterprise asset management.
 
----
-
-## Vision: The Programmable CFO
-
-Treasury management in Web3 remains manual, error-prone, and reactive. ArcTreasury transforms the treasury from a static vault into a dynamic, programmable engine. By defining "Payout Policies," organisations can automate complex distributions such as payroll, vesting, or liquidity provisioning—directly on Arc L1.
-
-## Key Features
-
-- **Enterprise Dark Mode UI**: A high-impact, sleek dashboard designed for 16:9 displays, prioritising visual clarity and data density.
-- **Programmable Policies**: Define recipients, split percentages, and payout intervals (e.g., Weekly, Bi-Weekly, Monthly).
-- **Automated Payout Execution**: Smart-contract enforced intervals ensure funds are only distributed when conditions are met.
-- **Dispute & Pause Mechanism**: Admin-level controls to instantly halt policies in case of internal disputes or auditing requirements.
-- **USDC Native**: Built from the ground up to integrate with standard ERC20 USDC on Arc Layer-1.
+Instead of full-stack protocols or monolithic governance systems, ArcTreasury focuses on doing one thing exceptionally well: enforcing mathematical and policy-driven guardrails on on-chain capital.
 
 ---
+
+## The Core Primitive
+
+ArcTreasury is designed as a minimalist, highly secure vault with strict Role-Based Access Control (RBAC):
+
+- **Deterministic Constraints**: Hardcoded EVM-level limits on transaction sizes (`perTxLimit`) and velocity (`dailyLimit`).
+- **Whitelist Enforcement**: Transfers can only be executed to pre-approved addresses set by the administrator (`CEO_ROLE`).
+- **O(1) Batched Distribution**: Implements a pull-claim architecture (inspired by Synthetix staking rewards) allowing the administrator to distribute yield or funds to multiple shareholders in a single O(1) gas transaction. Shareholders then pull their exact pro-rata share.
 
 ## Architecture
-
-ArcTreasury is a monorepo containing a modern Web3 stack:
 
 ```text
 ArcTreasury/
 ├── contracts/          # Hardhat Smart Contract Suite
-│   ├── contracts/      # ArcTreasury.sol (Solidity ^0.8.20)
-│   ├── scripts/        # Deployment & Initialization scripts
-│   └── hardhat.config  # Arc L1 Optimized Compiler Settings
-└── frontend/           # Next.js 15 App Router Dashboard
-    ├── app/            # Enterprise UI Logic & Design System
-    ├── components/     # High-polish visual components
-    └── wagmi.ts        # Arc L1 Web3 Configuration
+│   ├── contracts/      # OTTOVaultV2.sol (Core Treasury Engine)
+│   ├── test/           # Exhaustive Guardrail & Limit Tests
+│   └── scripts/        # Deployment Scripts
+└── frontend/           # Next.js Dashboard (In Development)
 ```
 
 **Tech Stack:**
 
-- **Smart Contracts**: Solidity, Hardhat, Ethers.js.
-- **Frontend**: Next.js (App Router), Tailwind CSS, Framer Motion.
-- **Web3**: wagmi, viem, ConnectKit.
+- **Smart Contracts**: Solidity ^0.8.24, Hardhat, OpenZeppelin ^5.0.0.
+- **Frontend**: Next.js, Tailwind CSS, wagmi.
+
+---
+
+## Layer 2: Optional Agent Module (Experimental)
+
+While ArcTreasury functions perfectly as a standalone multisig or admin-controlled vault, its deterministic guardrails make it the ideal financial primitive for **Agentic Execution**.
+
+By assigning the `AGENT_ROLE` to an AI wallet (e.g., a Claude-powered script), the agent can execute autonomous payouts, payroll, or rebalancing.
+Crucially, **the agent cannot go rogue.** If the agent hallucinates a payout to an unapproved address or exceeds its daily limits, the EVM physically blocks the transaction.
+
+*Note: The agent integration is currently experimental and designed to run on top of the ArcTreasury primitive.*
+
+---
+
+## Future: Cross-Chain & RWA Integration
+
+The roadmap for ArcTreasury includes extending the primitive to natively support cross-chain settlement (e.g., via Circle CCTP `burnAndMint`) and integration with tokenized Real World Assets (e.g., USYC) for idle yield generation.
 
 ---
 
@@ -50,7 +56,7 @@ ArcTreasury/
 - Node.js (v18+)
 - NPM/PNPM
 
-### Installation
+### Installation & Setup
 
 1. **Clone the repository**
 
@@ -59,7 +65,7 @@ ArcTreasury/
    cd arctreasury
    ```
 
-2. **Setup Contracts**
+2. **Compile Smart Contracts**
 
    ```bash
    cd contracts
@@ -67,24 +73,15 @@ ArcTreasury/
    npx hardhat compile
    ```
 
-3. **Setup Frontend**
+3. **Run Test Suite**
+   The test suite rigorously verifies the EVM guardrails and the O(1) pull-claim distribution math.
 
    ```bash
-   cd ../frontend
-   npm install
-   npm run dev
+   npx hardhat test
    ```
 
 ---
 
-## Demo Flow (Hackathon Submission)
-
-1. **Connect Wallet**: Securely connect via ConnectKit on the Arc L1 network.
-2. **Treasury Deposit**: Admin deposits USDC into the `ArcTreasury` contract.
-3. **Policy Creation**: Create a "Monthly Payroll" policy with 3 recipients and a 30-day interval.
-4. **Execute Payout**: Once the interval passes, click "Execute" to trigger a multi-split USDC distribution in a single atomic transaction.
-5. **Transparency**: View real-time status updates (Active/Paused) and historical distributions.
-
 ## License
 
-MIT License - Created for Arc Layer-1 blockchain ecosystem.
+MIT License - Created for the Arc Layer-1 blockchain ecosystem.
