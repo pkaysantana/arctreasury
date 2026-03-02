@@ -70,13 +70,14 @@ contract OTTOVaultV2 is AccessControl, Pausable {
     // CEO ACTIONS (Administration)
     // ==========================================
 
-    function setWhitelist(address account, bool status) external onlyRole(CEO_ROLE) {
-        isWhitelisted[account] = status;
-        emit Whitelisted(account, status);
-    }
-
-    function setShareToken(address _shareToken) external onlyRole(CEO_ROLE) {
+    function setShareToken(address _shareToken, address initialHolder, uint256 initialBalance) external onlyRole(CEO_ROLE) {
+        require(shareToken == address(0), "OTTO: Share token already set");
         shareToken = _shareToken;
+        
+        // Initialize the vault with the starting balances to prevent underflow
+        shareBalances[initialHolder] = initialBalance;
+        totalShares = initialBalance;
+        emit SharesRegistered(initialHolder, initialBalance);
     }
 
     function setCircleGateway(address _gateway) external onlyRole(CEO_ROLE) {
