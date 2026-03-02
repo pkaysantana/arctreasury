@@ -5,6 +5,10 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 
+interface ICircleGateway {
+    function burnAndMint(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient) external;
+}
+
 /**
  * @title OTTOVaultV2
  * @dev The core treasury vault for the OTTO DAC framework. 
@@ -16,6 +20,8 @@ contract OTTOVaultV2 is AccessControl, Pausable {
     bytes32 public constant AGENT_ROLE = keccak256("AGENT_ROLE");
 
     IERC20 public immutable usdc;
+    address public shareToken;
+    ICircleGateway public circleGateway;
     
     // ==========================================
     // AGENT GUARDRAILS
@@ -69,6 +75,14 @@ contract OTTOVaultV2 is AccessControl, Pausable {
         emit Whitelisted(account, status);
     }
 
+    function setShareToken(address _shareToken) external onlyRole(CEO_ROLE) {
+        shareToken = _shareToken;
+    }
+
+    function setCircleGateway(address _gateway) external onlyRole(CEO_ROLE) {
+        circleGateway = ICircleGateway(_gateway);
+    }
+
     function setLimits(uint256 _perTxLimit, uint256 _dailyLimit) external onlyRole(CEO_ROLE) {
         perTxLimit = _perTxLimit;
         dailyLimit = _dailyLimit;
@@ -107,6 +121,27 @@ contract OTTOVaultV2 is AccessControl, Pausable {
         require(usdc.transfer(to, amount), "OTTO: Transfer failed");
         
         emit AgentTransfer(to, amount);
+    }
+
+    /**
+     * @notice Executed by the AI Agent to move USDC across chains securely.
+     */
+    function executeCrossChain(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient) external onlyRole(AGENT_ROLE) whenNotPaused {
+        require(address(circleGateway) != address(0), "OTTO: Gateway not set");
+        require(amount <= perTxLimit, "OTTO: Exceeds per-tx limit");
+
+        if (block.timestamp >= lastResetTime + 1 days) {
+            dailySpent = 0;
+            lastResetTime = block.timestamp;
+        }
+
+        require(dailySpent + amount <= dailyLimit, "OTTO: Exceeds daily limit");
+        dailySpent += amount;
+
+        require(usdc.approve(address(circleGateway), amount), "OTTO: Approve failed");
+        circleGateway.burnAndMint(amount, destinationDomain, mintRecipient);
+        
+        emit AgentTransfer(address(circleGateway), amount);
     }
 
     // ==========================================
@@ -158,17 +193,31 @@ contract OTTOVaultV2 is AccessControl, Pausable {
 
     /**
      * @notice Associates shares with this vault for revenue tracking.
-     * @dev In a full DAC stack, this would hook into OTTOShareToken transfers.
+     * @dev Called automatically by the OTTOShareToken when transfers occur.
      */
-    function registerShares(uint256 amount) external updateReward(msg.sender) {
-        totalShares += amount;
-        shareBalances[msg.sender] += amount;
-        emit SharesRegistered(msg.sender, amount);
-    }
-    
-    function unregisterShares(uint256 amount) external updateReward(msg.sender) {
-        totalShares -= amount;
-        shareBalances[msg.sender] -= amount;
-        emit SharesUnregistered(msg.sender, amount);
+    function syncShares(address from, address to, uint256 amount) external {
+        require(msg.sender == shareToken, "OTTO: Unauthorized");
+
+        // Manually update rewards for both parties before changing balances
+        rewardPerShareStored = rewardPerShare();
+        
+        if (from != address(0)) {
+            rewards[from] = earned(from);
+            userRewardPerSharePaid[from] = rewardPerShareStored;
+            shareBalances[from] -= amount;
+        } else {
+            totalShares += amount;
+        }
+
+        if (to != address(0)) {
+            rewards[to] = earned(to);
+            userRewardPerSharePaid[to] = rewardPerShareStored;
+            shareBalances[to] += amount;
+        } else {
+            totalShares -= amount;
+        }
+
+        if (from != address(0)) emit SharesUnregistered(from, amount);
+        if (to != address(0)) emit SharesRegistered(to, amount);
     }
 }
