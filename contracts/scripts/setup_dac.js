@@ -27,7 +27,8 @@ async function main() {
 
     // Wire them together
     console.log("Linking Token and Vault...");
-    await vault.setShareToken(token.target);
+    const initialSupply = ethers.parseUnits("10000", await token.decimals());
+    await vault.setShareToken(token.target, deployer.address, initialSupply);
     await token.setVault(vault.target);
 
     // 3 & 4. Setup Roles

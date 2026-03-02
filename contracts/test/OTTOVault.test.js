@@ -26,7 +26,8 @@ describe("OTTOVaultV2 O(1) Distribution Stress Test & Limits", function () {
         vault = await Vault.deploy(usdc.target, ceo.address, agent.address);
 
         // Link
-        await vault.setShareToken(token.target);
+        const initialSupply = ethers.parseUnits("10000", 18);
+        await vault.setShareToken(token.target, ceo.address, initialSupply);
         await token.setVault(vault.target);
 
         // Fund CEO with USDC for distribution and general testing
